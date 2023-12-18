@@ -1,0 +1,17 @@
+{{ define "home/index.html"}}
+    {{ template "layout/header.html"}}
+    <h1>{{.title}}<h1>
+        <p>
+            <div class="btn-group" role="group">
+                {{ if .logged_in}}
+                <form action="/logout" method="POST">
+                    <button type="submit" class="btn btn-online-danger">Logout</button>
+                </form>
+                {{ else}}
+                <a href="/login" role="button" class="btn btn-online-primary">Login</a>
+                <a href="/signup" role="button" class="btn btn-online-primary">Sign Up</a>
+                {{ end}}
+            </div>
+        </p>
+    {{ template "layout/footer.html"}}
+{{ end }}

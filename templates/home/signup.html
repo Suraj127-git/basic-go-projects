@@ -1,0 +1,20 @@
+{{ define "home/signup.html" }}
+    {{ template "layout/header.html" .}}
+      <form action="/signup" method="POST">
+        <div class="mb-3">
+          <label for="Email" class="form-group">Email</label>
+          <input type="text" class="form-control" id="email" name="email" placeholder="Enter email id">
+          <small id="emailHelp" class="form-text text-muted">Title for note.</small>
+        </div>
+        <div class="mb-3" >
+          <label for="password" class="form-group">Password</label>
+          <input type="text" class="form-control" id="password" name="password" placeholder="Enter your Password">
+        </div>
+        <div class="mb-3">
+            <label for="confirm_password" class="form-group">Confirm Password</label>
+            <input type="text" class="form-control" id="confirm_password" name="confirm_password" placeholder="Confirm your Password">
+          </div>
+        <button type="submit" class="btn btn-primary">Submit</button>
+      </form>
+    {{ template "layout/footer.html" .}}
+{{ end }}

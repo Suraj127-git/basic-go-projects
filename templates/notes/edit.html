@@ -1,0 +1,19 @@
+{{ define "notes/edit.html"}}
+    {{ template "layout/header.html"}}
+        <h1>Edit Note</h1>
+        {{ range .}}
+        <form action="/notes/{{ .ID}}" method="POST">
+            <div class="form-group">
+              <label for="exampleInputEmail1">Title</label>
+              <input type="text" class="form-control" id="name" name="name" placeholder="Enter Note" value="{{ .Name}}">
+              <small id="emailHelp" class="form-text text-muted">Title for note.</small>
+            </div>
+            <div class="form-group">
+              <label for="exampleInputPassword1">Content</label>
+              <input type="text" class="form-control" id="content" name="content" placeholder="Enter your Content" value="{{ .Content}}">
+            </div>
+            <button type="submit" class="btn btn-primary">Submit</button>
+          </form>
+        {{ end }}
+    {{ template "layout/footer.html"}}
+{{ end }}

@@ -1,37 +1,59 @@
 package main
 
 import (
-	"fmt"
 	"log"
-	"os"
+	"net/http"
+	"note-app/controllers"
+	"note-app/middlewares"
+	"note-app/models"
 
-	"github.com/joho/godotenv"
-
-	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/logger"
-	"github.com/suraj/url-shortener/api/routes"
+	"github.com/gin-contrib/sessions"
+	"github.com/gin-contrib/sessions/memstore"
+	"github.com/gin-gonic/gin"
 )
 
-func setupRoutes(app *fiber.App) {
-	app.Get("/:url", routes.ResolveURL)
-	app.Post("/api/v1", routes.ShortenURL)
-}
-
 func main() {
+	r := gin.Default()
 
-	env_data := godotenv.Load()
+	r.Use(gin.Logger())
 
-	if env_data != nil {
-		fmt.Println(env_data)
+	r.Static("/vendor", "./static/vendor")
+
+	r.LoadHTMLGlob("templates/**/*")
+
+	models.ConnectDatabase()
+	models.DBMigrate()
+
+	store := memstore.NewStore([]byte("secret"))
+	r.Use(sessions.Sessions("notes", store))
+
+	notes := r.Group("/notes")
+	{
+		notes.GET("/", controllers.NotesIndex)
+		notes.GET("/new", controllers.NotesNew)
+		notes.POST("/", controllers.NotesCreate)
+		notes.GET("/:id", controllers.NotesShow)
+		notes.GET("/edit/:id", controllers.NotesEdit)
+		notes.POST("/:id", controllers.NotesUpdate)
+		notes.DELETE("/:id", controllers.NotesDelete)
 	}
 
-	app := fiber.New()
+	r.GET("/login", controllers.LoginPage)
+	r.GET("/signup", controllers.SignupPage)
 
-	app.Use(logger.New())
+	r.POST("/signup", controllers.SignUp)
+	r.POST("/login", controllers.Login)
+	r.POST("/logout", controllers.Logout)
 
-	setupRoutes(app)
+	r.GET("/", func(c *gin.Context) {
+		c.HTML(http.StatusOK, "home/index.html", gin.H{
+			"title":     "Notes Appliaction",
+			"logged_in": (c.GetUint64("user_id") > 0),
+		})
+	})
 
-	address := fmt.Sprintf("%s:%s", os.Getenv("APP_HOST"), os.Getenv("APP_PORT"))
-	log.Fatal(app.Listen(address))
+	r.Use(middlewares.AuthenticateUser())
 
+	log.Println("Server Started")
+	r.Run(":9090")
 }
