@@ -31,6 +31,7 @@ deps:
 	$(GOGET) -u github.com/joho/godotenv
 	$(GOGET) -u github.com/go-redis/redis/v8
 	$(GOGET) -u github.com/asaskevich/govalidator
+	$(GOGET) -u github.com/go-delve/delve/cmd/dlv
 
 # Run the application
 run:
