@@ -6,27 +6,33 @@ import (
 	"github.com/suraj/url-shortener/internal/database"
 )
 
+const (
+	notFoundStatus      = fiber.StatusNotFound
+	internalErrorStatus = fiber.StatusInternalServerError
+	redirectStatusCode  = 301
+	redisDatabaseMain   = 0
+	redisDatabaseIncr   = 1
+)
+
 func ResolveURL(c *fiber.Ctx) error {
 	url := c.Params("url")
 
-	r := database.CreateRedisClient(0)
+	r := database.CreateRedisClient(redisDatabaseMain)
 	defer r.Close()
 
 	value, err := r.Get(url).Result()
-	if err == redis.Nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+	switch {
+	case err == redis.Nil:
+		return c.Status(notFoundStatus).JSON(fiber.Map{
 			"error": "Short not found in the database",
 		})
-	} else if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "cannot connect to database",
+	case err != nil:
+		return c.Status(internalErrorStatus).JSON(fiber.Map{
+			"error": "Cannot connect to the database",
 		})
 	}
 
-	r_inr := database.CreateRedisClient(1)
-	defer r_inr.Close()
+	_ = r.Incr("counter")
 
-	_ = r_inr.Incr("counter")
-
-	return c.Redirect(value, 301)
+	return c.Redirect(value, redirectStatusCode)
 }

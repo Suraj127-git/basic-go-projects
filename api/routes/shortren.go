@@ -27,80 +27,89 @@ type response struct {
 	XRateLimitRest time.Duration `json:"rate_limit_reached"`
 }
 
+const (
+	defaultExpiry      = 24 * time.Hour
+	apiQuotaTTL        = 30 * time.Minute
+	defaultRateLimit   = 10
+	rateLimitDecrement = 1
+)
+
 func ShortenURL(c *fiber.Ctx) error {
-
 	body := new(request)
-
+	// fmt.Print(body)
 	if err := c.BodyParser(&body); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request body"})
 	}
 
-	r2 := database.CreateRedisClient(1)
+	r := database.CreateRedisClient(redisDatabaseMain)
+	defer r.Close()
+
+	r2 := database.CreateRedisClient(redisDatabaseIncr)
 	defer r2.Close()
+
+	// Rate Limiting
 	val, err := r2.Get(c.IP()).Result()
 	if err == redis.Nil {
-		_ = r2.Set(c.IP(), os.Getenv("API_QUOTA"), 30*60*time.Second).Err()
+		_ = r2.Set(c.IP(), os.Getenv("API_QUOTA"), apiQuotaTTL).Err()
 	} else {
 		valInt, _ := strconv.Atoi(val)
 		if valInt <= 0 {
 			limit, _ := r2.TTL(c.IP()).Result()
 			return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{
 				"error":           "Rate limit exceeded",
-				"rate_limit_rest": limit / time.Nanosecond / time.Second,
+				"rate_limit_rest": limit / time.Minute,
 			})
 		}
 	}
 
-	if !govalidator.IsURL(body.URl) {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid URL"})
-	}
-
-	if !helpers.RemoveDomainError(body.URl) {
+	// Validate URL
+	if !govalidator.IsURL(body.URl) || !helpers.RemoveDomainError(body.URl) {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid URL"})
 	}
 
 	body.URl = helpers.EnforceHTTP(body.URl)
 
+	// Generate Short URL ID
 	var id string
-
 	if body.CustomShort == "" {
 		id = uuid.New().String()[:6]
 	} else {
 		id = body.CustomShort
 	}
-	r := database.CreateRedisClient(0)
-	defer r.Close()
 
+	// Check if Short URL ID already exists
 	val, _ = r.Get(id).Result()
 	if val != "" {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Short URL already exists"})
 	}
 
+	// Set Short URL in Redis
 	if body.Expiry == 0 {
-		body.Expiry = 24
+		body.Expiry = time.Duration(defaultExpiry.Hours()) * time.Hour
 	}
 
-	err = r.Set(id, body.URl, body.Expiry*3600*time.Second).Err()
-
+	err = r.Set(id, body.URl, time.Duration(body.Expiry)*time.Hour).Err()
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Unable to connect to server"})
 	}
 
+	// Response
 	resp := response{
 		URL:            body.URl,
 		CustomShort:    "",
-		Expiry:         body.Expiry.String(),
-		XRateRemaining: 10,
-		XRateLimitRest: 30,
+		Expiry:         time.Duration(body.Expiry).String(),
+		XRateRemaining: defaultRateLimit,
+		XRateLimitRest: apiQuotaTTL / time.Minute,
 	}
 
-	r2.Decr(c.IP())
+	// Update Rate Limiting
+	r2.DecrBy(c.IP(), rateLimitDecrement)
 
 	val, _ = r2.Get(c.IP()).Result()
 	resp.XRateRemaining, _ = strconv.Atoi(val)
 
 	ttl, _ := r2.TTL(c.IP()).Result()
-	resp.XRateLimitRest = ttl / time.Nanosecond / time.Minute
+	resp.XRateLimitRest = ttl / time.Minute
 
 	resp.CustomShort = os.Getenv("DOMAIN") + "/" + id
 

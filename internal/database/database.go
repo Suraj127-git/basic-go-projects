@@ -4,17 +4,35 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sync"
 
 	"github.com/go-redis/redis"
 )
 
-var Ctx = context.Background()
+var (
+	ctx          = context.TODO()
+	redisConnMap = make(map[int]*redis.Client)
+	redisConnMu  sync.Mutex
+)
 
 func CreateRedisClient(dbNo int) *redis.Client {
-	redis_conn := redis.NewClient(&redis.Options{
+	redisConnMu.Lock()
+	defer redisConnMu.Unlock()
+
+	if client, ok := redisConnMap[dbNo]; ok {
+		return client
+	}
+
+	redisConn := redis.NewClient(&redis.Options{
 		Addr:     fmt.Sprintf("%s:%s", os.Getenv("DB_HOST"), os.Getenv("DB_PORT")),
 		Password: os.Getenv("DB_PASS"),
 		DB:       dbNo,
 	})
-	return redis_conn
+
+	if _, err := redisConn.Ping().Result(); err != nil {
+		return nil
+	}
+
+	redisConnMap[dbNo] = redisConn
+	return redisConn
 }
